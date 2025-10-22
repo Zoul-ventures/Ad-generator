@@ -1,0 +1,19 @@
+# Node / Vite
+node_modules/
+dist/
+.vite/
+*.log
+
+# Editor directories and files
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# Env
+.env
+.env.*
+
+# Build artifacts
+coverage/
+*.tsbuildinfo
