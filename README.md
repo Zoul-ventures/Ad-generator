@@ -1,6 +1,6 @@
-# AI Ad Generator Frontend
+# Contento
 
-React single-page application for crafting high converting advertising copy with AI. The interface helps marketers collect structured campaign inputs, generates on-brand copy locally, and prepares a clean prompt to send to their preferred language model.
+Contento is a React single-page application for crafting high converting advertising copy with AI. The interface helps marketers collect structured campaign inputs, generates on-brand copy locally, and prepares a clean prompt to send to their preferred language model.
 
 ## Features
 
@@ -29,6 +29,8 @@ npm run preview
 ## Project Structure
 
 ```
+public/
+  assets/                 # Logos, imagery, and static brand files
 src/
   App.jsx                 # Layout + state orchestration
   main.jsx                # Vite entry point

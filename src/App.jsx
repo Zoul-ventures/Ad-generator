@@ -77,7 +77,11 @@ const App = () => {
     <div className="app-shell">
       <header className="app-header">
         <div className="brand">
-          <span className="brand-logo">AdForge</span>
+          <img
+            className="brand-mark"
+            src="/assets/contento vector morado.svg"
+            alt="Contento logo"
+          />
           <span className="brand-badge">AI powered</span>
         </div>
         <nav className="app-nav">
