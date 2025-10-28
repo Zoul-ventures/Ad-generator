@@ -1,63 +1,48 @@
-const toneDescriptors = {
-  friendly: ['friendly', 'approachable', 'helpful'],
-  bold: ['bold', 'energetic', 'punchy'],
-  luxury: ['luxurious', 'refined', 'exclusive'],
-  playful: ['playful', 'witty', 'fun'],
-  informative: ['informative', 'clear', 'insightful']
-};
-
-const platformAngles = {
-  facebook: {
-    hook: 'Join thousands already enjoying',
-    callToAction: 'Shop Now'
-  },
+const platformPresets = {
   instagram: {
-    hook: 'Stop scrolling and discover',
-    callToAction: 'Explore Today'
+    label: 'Instagram',
+    aspectRatio: '1080x1080',
+    creativeNote: 'Square feed placements love bold focal points and layered typography.',
+    paletteClass: 'palette-instagram'
   },
-  tiktok: {
-    hook: 'Trending now',
-    callToAction: 'Watch & Shop'
+  reels: {
+    label: 'Reels / Stories',
+    aspectRatio: '1080x1920',
+    creativeNote: 'Vertical storytelling works best with motion-first framing and captions.',
+    paletteClass: 'palette-reels'
+  },
+  youtube: {
+    label: 'YouTube',
+    aspectRatio: '1920x1080 (16:9)',
+    creativeNote: 'Wide cinematic compositions should highlight a strong central subject.',
+    paletteClass: 'palette-youtube'
+  },
+  facebook: {
+    label: 'Facebook',
+    aspectRatio: '1200x630',
+    creativeNote: 'Feed visuals benefit from conversational copy and clear focal elements.',
+    paletteClass: 'palette-facebook'
   },
   linkedin: {
-    hook: 'Unlock your advantage with',
-    callToAction: 'Learn More'
-  },
-  email: {
-    hook: 'Exclusive offer inside:',
-    callToAction: 'Claim Offer'
+    label: 'LinkedIn',
+    aspectRatio: '1200x627',
+    creativeNote: 'Lead with credibility and clean layouts to resonate with professionals.',
+    paletteClass: 'palette-linkedin'
   }
 };
 
-const toneCallsToAction = {
-  friendly: ['Let\'s Go', 'Start Your Journey', 'Join the Community'],
-  bold: ['Get Yours Now', 'Take Charge Today', 'Dominate Your Goals'],
-  luxury: ['Experience the Difference', 'Elevate Your Lifestyle', 'Indulge Now'],
-  playful: ['Dive In', 'Let the Fun Begin', 'Try the Magic'],
-  informative: ['Discover the Details', 'See How It Works', 'Learn the Facts']
-};
+const platformFallback = platformPresets.instagram;
 
-const benefitOpeners = [
-  'Here\'s why it matters:',
-  'You\'ll love it because:',
-  'In a nutshell:',
-  'Top reasons customers choose us:',
-  'Quick wins we deliver:'
-];
+export const platformOptions = Object.entries(platformPresets).map(([value, config]) => ({
+  value,
+  label: config.label,
+  aspectRatio: config.aspectRatio
+}));
 
-const transitionPhrases = [
-  'No more settling for average.',
-  'It\'s crafted for people who expect more.',
-  'Imagine the difference in your day.',
-  'Built to make every moment count.',
-  'Because time is too precious for compromises.'
-];
+export const getPlatformDetails = (platform) =>
+  platformPresets[platform] ?? platformFallback;
 
-const formatKeyFeatures = (features) =>
-  features
-    .split(',')
-    .map((feature) => feature.trim())
-    .filter(Boolean);
+export const getAspectRatio = (platform) => getPlatformDetails(platform).aspectRatio;
 
 const pickRandom = (list, fallback) =>
   list[Math.floor(Math.random() * list.length)] || fallback;
@@ -70,80 +55,197 @@ const toTitleCase = (text) =>
 
 const uniqueId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+const parseKeywords = (keywords) =>
+  keywords
+    .split(',')
+    .map((keyword) => keyword.trim())
+    .filter(Boolean);
+
+const isHexColor = (value) => /^#[0-9A-F]{6}$/i.test(value);
+
+const describePalette = (colors) => {
+  const valid = (colors || [])
+    .map((color) => (typeof color === 'string' ? color.trim().toUpperCase() : ''))
+    .filter(isHexColor);
+
+  if (!valid.length) {
+    return null;
+  }
+
+  if (valid.length === 1) {
+    return `${valid[0]} as the hero hue`;
+  }
+
+  const [primary, ...rest] = valid;
+  if (rest.length === 1) {
+    return `${primary} anchored by ${rest[0]}`;
+  }
+
+  return `${primary} anchored by ${rest.slice(0, -1).join(', ')} and ${rest[rest.length - 1]}`;
+};
+
+const ensureSentence = (text) => {
+  if (!text) {
+    return '';
+  }
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return '';
+  }
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+};
+
+const ctaLibrary = [
+  {
+    matches: ['launch', 'introduce', 'debut', 'new', 'drop'],
+    options: ['Explore the launch', "See what's new", 'Preview the drop']
+  },
+  {
+    matches: ['shop', 'buy', 'purchase', 'retail', 'store', 'collection'],
+    options: ['Shop the collection', 'Add to cart', 'Discover the lineup']
+  },
+  {
+    matches: ['sign', 'register', 'join', 'subscribe', 'waitlist'],
+    options: ['Join the waitlist', 'Sign up today', 'Subscribe for updates']
+  },
+  {
+    matches: ['learn', 'guide', 'education', 'webinar', 'class'],
+    options: ['Reserve your spot', 'Get the guide', 'Save your seat']
+  },
+  {
+    matches: ['download', 'app', 'tool', 'platform'],
+    options: ['Download now', 'Try the platform', 'Start your free demo']
+  }
+];
+
+const defaultCtas = ['Discover more', 'Learn more', 'See the story', 'Explore now'];
+
+const deriveCallToAction = (goal) => {
+  if (!goal) {
+    return pickRandom(defaultCtas, 'Discover more');
+  }
+
+  const normalized = goal.toLowerCase();
+  for (const entry of ctaLibrary) {
+    if (entry.matches.some((keyword) => normalized.includes(keyword))) {
+      return pickRandom(entry.options, defaultCtas[0]);
+    }
+  }
+
+  return pickRandom(defaultCtas, 'Discover more');
+};
+
 export const generateAdCopy = (form) => {
+  const platformKey = form.socialPlatform || 'instagram';
+  const platformInfo = getPlatformDetails(platformKey);
+
   const {
-    productName,
-    productDescription,
-    targetAudience,
-    tone,
-    platform,
-    callToAction,
-    primaryGoal,
+    brandName,
+    brandColors = [],
+    font,
+    goal,
+    headline,
+    brandContext,
+    brandFeel,
+    brandMood,
+    visualStyle,
     keywords
   } = form;
 
-  const platformConfig = platformAngles[platform] ?? platformAngles.facebook;
-  const toneWords = toneDescriptors[tone] ?? toneDescriptors.friendly;
-  const normalizedName = productName.trim() ? productName.trim() : 'your brand';
-  const features = formatKeyFeatures(keywords || '');
-  const toneCtaOptions = toneCallsToAction[tone] ?? toneCallsToAction.friendly;
+  const brandLabel = brandName?.trim() ? brandName.trim() : 'Your brand';
+  const paletteDescription = describePalette(brandColors);
+  const keywordList = parseKeywords(keywords || '');
+  const resolvedHeadline = headline?.trim()
+    ? headline.trim()
+    : goal
+    ? `${toTitleCase(goal)} with ${brandLabel}`
+    : `Make ${brandLabel} impossible to ignore`;
 
-  const headline = `${toTitleCase(
-    pickRandom(toneWords, 'next-level')
-  )} ${normalizedName} ${primaryGoal ? `for ${primaryGoal}` : ''}`.trim();
+  const intro = brandContext?.trim()
+    ? ensureSentence(brandContext)
+    : ensureSentence(
+        goal
+          ? `${brandLabel} is shaping this campaign to ${goal.trim()}`
+          : `${brandLabel} is building momentum for an upcoming moment`
+      );
 
-  const audienceLine = targetAudience
-    ? `Perfect for ${targetAudience.trim()}.`
-    : 'Perfect for anyone ready to upgrade.';
-  const benefitIntro = pickRandom(benefitOpeners);
-  const transition = pickRandom(transitionPhrases);
+  const platformLine = ensureSentence(platformInfo.creativeNote);
+  const paletteLine = paletteDescription
+    ? ensureSentence(`Palette cues: ${paletteDescription}`)
+    : '';
+  const feelLine = ensureSentence(
+    `Brand feel: ${brandFeel?.trim() || 'Refined and confident with premium touches'}`
+  );
+  const moodLine = ensureSentence(
+    `Brand mood: ${brandMood?.trim() || 'Optimistic, energetic, and modern'}`
+  );
+  const visualLine = ensureSentence(
+    `Visual style: ${visualStyle?.trim() || 'High-contrast imagery with tactile details'}`
+  );
+  const fontLine = font?.trim() ? ensureSentence(`Typography: ${font.trim()}`) : '';
+  const keywordsLine = keywordList.length
+    ? ensureSentence(`Keywords to weave in: ${keywordList.join(', ')}`)
+    : '';
+  const aspectLine = ensureSentence(`Recommended aspect ratio: ${platformInfo.aspectRatio}`);
 
-  const bodyLines = [
-    productDescription && productDescription.trim()
-      ? productDescription.trim()
-      : `${normalizedName} delivers results that feel ${pickRandom(toneWords)}.`,
-    transition,
-    features.length
-      ? `${benefitIntro} ${features.map((feature) => `- ${feature}`).join(' ')}`
-      : '',
-    audienceLine
+  const bodySegments = [
+    intro,
+    platformLine,
+    paletteLine,
+    feelLine,
+    moodLine,
+    visualLine,
+    fontLine,
+    keywordsLine,
+    aspectLine
   ].filter(Boolean);
 
-  const body = bodyLines.join(' ');
-
-  const finalCta =
-    callToAction?.trim() || pickRandom(toneCtaOptions, platformConfig.callToAction);
+  const body = bodySegments.join(' ');
+  const callToAction = deriveCallToAction(goal);
 
   const variants = [
-    `${pickRandom(toneWords)} vibes with ${normalizedName}. ${bodyLines[0]}`,
-    `${normalizedName}: ${primaryGoal || 'Made for people who expect better.'}`,
-    `${platformConfig.hook} ${normalizedName}. ${finalCta}!`
+    `${platformInfo.label} focus: ${platformInfo.creativeNote}`,
+    `Brand feel -> ${brandFeel?.trim() || 'Refined & confident'}`,
+    `Moodboard -> ${brandMood?.trim() || 'Optimistic / Energetic / Modern'}`,
+    keywordList.length
+      ? `Keywords in rotation: ${keywordList.join(' | ')}`
+      : 'Keywords in rotation: premium | confident | modern'
   ];
 
   return {
     id: uniqueId(),
     createdAt: new Date().toISOString(),
-    platform,
-    headline,
+    platform: platformKey,
+    platformLabel: platformInfo.label,
+    aspectRatio: platformInfo.aspectRatio,
+    headline: resolvedHeadline,
     body,
-    callToAction: finalCta,
+    callToAction,
     variants
   };
 };
 
 export const getPromptTemplate = (form) => {
-  const features = formatKeyFeatures(form.keywords || '');
-  return [
-    `Write a high-converting ${form.platform} ad for ${form.productName || 'a product'}.`,
-    form.productDescription
-      ? `Product details: ${form.productDescription}`
-      : '',
-    form.targetAudience ? `Audience: ${form.targetAudience}` : '',
-    form.tone ? `Tone: ${form.tone}` : '',
-    form.primaryGoal ? `Goal: ${form.primaryGoal}` : '',
-    features.length ? `Highlight: ${features.join(', ')}` : '',
-    form.callToAction ? `Use CTA: ${form.callToAction}` : ''
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const colors = (form.brandColors || []).filter(isHexColor);
+  const keywordList = parseKeywords(form.keywords || '');
+  const platformInfo = getPlatformDetails(form.socialPlatform || 'instagram');
+
+  const lines = [
+    `Create polished brand-forward ad copy for ${form.brandName || 'a brand'}.`,
+    form.brandContext ? `Brand context: ${form.brandContext}` : '',
+    form.goal ? `Campaign goal: ${form.goal}` : '',
+    form.brandFeel ? `Brand feel: ${form.brandFeel}` : '',
+    form.brandMood ? `Brand mood: ${form.brandMood}` : '',
+    form.headline ? `Headline direction: ${form.headline}` : '',
+    colors.length ? `Brand colors (hex): ${colors.join(', ')}` : '',
+    form.font ? `Typography preference: ${form.font}` : '',
+    form.visualStyle ? `Visual style guidance: ${form.visualStyle}` : '',
+    keywordList.length ? `Keywords to incorporate: ${keywordList.join(', ')}` : '',
+    `Primary platform: ${platformInfo.label}`,
+    `Recommended aspect ratio: ${platformInfo.aspectRatio}`,
+    form.logo?.name ? `Logo asset available: ${form.logo.name}` : '',
+    'Return a compelling headline, a two-sentence body, and a CTA that matches the goal.'
+  ];
+
+  return lines.filter(Boolean).join('\n');
 };

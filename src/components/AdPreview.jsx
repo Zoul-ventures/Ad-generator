@@ -3,11 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 
 const platformPalette = {
-  facebook: 'palette-facebook',
   instagram: 'palette-instagram',
-  tiktok: 'palette-tiktok',
+  reels: 'palette-reels',
+  youtube: 'palette-youtube',
+  facebook: 'palette-facebook',
   linkedin: 'palette-linkedin',
-  email: 'palette-email'
+  tiktok: 'palette-tiktok',
+  email: 'palette-email',
+  'brand brief': 'palette-brief'
 };
 
 const EmptyState = () => (
@@ -65,9 +68,12 @@ const AdPreview = ({ ad, prompt, onCopy, copied }) => (
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className={clsx('ad-card', platformPalette[ad.platform])}
+            className={clsx('ad-card', platformPalette[ad.platform] || 'palette-brief')}
           >
-            <span className="platform-tag">{ad.platform}</span>
+            <span className="platform-tag">{ad.platformLabel || ad.platform}</span>
+            {ad.aspectRatio ? (
+              <span className="aspect-tag">Aspect ratio: {ad.aspectRatio}</span>
+            ) : null}
             <h3>{ad.headline}</h3>
             <p className="ad-body">{ad.body}</p>
             <button type="button" className="cta-button">

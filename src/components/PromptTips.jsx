@@ -1,40 +1,90 @@
 import React, { useMemo } from 'react';
 
+const DEFAULT_BRAND_COLOR = '#6C47FF';
+
 const baseTips = [
   {
-    id: 'cta',
-    condition: (form) => !form.callToAction,
-    title: 'Add a call-to-action',
-    detail: 'Specific CTAs boost conversions - try "Start free trial" or "Book a demo".'
+    id: 'goal',
+    condition: (form) => !form.goal,
+    title: 'Clarify the campaign goal',
+    detail: 'Spell out the outcome you want - launch hype, sign-ups, sales - so copy leans into it.'
   },
   {
-    id: 'audience',
-    condition: (form) => !form.targetAudience,
-    title: 'Describe your audience',
-    detail: 'Mention their role, motivation, or pain points for targeted language.'
+    id: 'context',
+    condition: (form) => !form.brandContext,
+    title: 'Share brand context',
+    detail: 'A sentence about launches, partnerships, or seasonality keeps everyone aligned.'
   },
   {
-    id: 'features',
+    id: 'feel',
+    condition: (form) => !form.brandFeel,
+    title: 'Name the brand feel',
+    detail: 'A few texture words (e.g. polished, grounded) make creative intent obvious.'
+  },
+  {
+    id: 'mood',
+    condition: (form) => !form.brandMood,
+    title: 'Define the mood',
+    detail: 'Emotional cues help writers match the energy—try 2-3 adjectives.'
+  },
+  {
+    id: 'palette',
+    condition: (form) =>
+      (form.brandColors || []).filter((color) => color && color !== DEFAULT_BRAND_COLOR).length < 1,
+    title: 'Expand the palette',
+    detail: 'Add a secondary hex code so designers have flexibility for highlights and accents.'
+  },
+  {
+    id: 'visualStyle',
+    condition: (form) => !form.visualStyle,
+    title: 'Describe the visual style',
+    detail: 'Mention mood, lighting, or layout cues to steer imagery and art direction.'
+  },
+  {
+    id: 'keywords',
     condition: (form) => !form.keywords,
-    title: 'List 2-3 top benefits',
-    detail: 'Use commas to separate feature highlights you want surfaced.'
+    title: 'Drop in brand keywords',
+    detail: 'Short comma-separated phrases keep messaging on-brand during generation.'
+  },
+  {
+    id: 'logo',
+    condition: (form) => !form.logo,
+    title: 'Attach a logo',
+    detail: 'Remind future you to keep the latest logo handy when sharing the brief.'
   }
 ];
 
 const buildQuickStart = (form) => {
   const suggestions = [];
-  if (!form.productDescription) {
-    suggestions.push('Add a short product description');
+
+  if (!form.brandName) {
+    suggestions.push('Add the brand name for personalized headlines.');
   }
-  if (!form.primaryGoal) {
-    suggestions.push('Select a campaign goal to shape messaging');
+
+  if (!form.brandContext) {
+    suggestions.push('Set the brand context so the narrative is grounded.');
   }
-  if (form.platform === 'linkedin' && form.tone !== 'informative') {
-    suggestions.push('LinkedIn works well with an informative tone');
+
+  if (!form.headline) {
+    suggestions.push('Seed a headline idea to anchor the tone of the copy.');
   }
-  if (form.platform === 'tiktok' && form.tone === 'informative') {
-    suggestions.push('Try a playful tone for short-form video platforms');
+
+  if (!form.font) {
+    suggestions.push('Note headline and body fonts so typographers stay aligned.');
   }
+
+  if (!form.brandFeel) {
+    suggestions.push('Capture the brand feel with 2-3 descriptive words.');
+  }
+
+  if (!form.brandMood) {
+    suggestions.push('Add the mood so imagery and copy land with the right emotion.');
+  }
+
+  if ((form.brandColors || []).length === 1) {
+    suggestions.push('Consider adding one more accent color for versatility.');
+  }
+
   return suggestions;
 };
 
@@ -50,7 +100,7 @@ const PromptTips = ({ form }) => {
       <header className="panel-header">
         <div>
           <h2>Prompt strategist</h2>
-          <p>Quick reminders to help the AI deliver sharper copy.</p>
+          <p>Quick reminders to help your brief cover every creative angle.</p>
         </div>
       </header>
       <div className="panel-body">
@@ -64,7 +114,7 @@ const PromptTips = ({ form }) => {
           {actionable.length === 0 ? (
             <li>
               <h4>Looking good!</h4>
-              <p>Your brief covers the essentials. Generate to see magic.</p>
+              <p>Your brief covers the essentials. Generate to share it with the team.</p>
             </li>
           ) : null}
         </ul>

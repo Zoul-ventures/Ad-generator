@@ -3,17 +3,101 @@ import AdForm from './components/AdForm.jsx';
 import AdPreview from './components/AdPreview.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
 import PromptTips from './components/PromptTips.jsx';
-import { generateAdCopy, getPromptTemplate } from './utils/generateAd.js';
+import { generateAdCopy, getPromptTemplate, getPlatformDetails } from './utils/generateAd.js';
 
 const defaultForm = {
-  productName: '',
-  productDescription: '',
-  targetAudience: '',
-  tone: 'friendly',
-  platform: 'facebook',
-  callToAction: '',
-  primaryGoal: '',
-  keywords: ''
+  brandName: '',
+  brandColors: ['#6C47FF'],
+  font: '',
+  socialPlatform: 'instagram',
+  goal: '',
+  headline: '',
+  brandContext: '',
+  brandFeel: '',
+  brandMood: '',
+  visualStyle: '',
+  keywords: '',
+  logo: null
+};
+
+const WEBHOOK_URL =
+  'https://n8n.srv969821.hstgr.cloud/webhook-test/e9714c18-2d7f-4ea7-836c-ec25f6f49dcc';
+
+const sendWebhookPayload = async (payload) => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 7000);
+
+  try {
+    const response = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+      mode: 'cors'
+    });
+
+    window.clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Webhook responded with status ${response.status}`);
+    }
+
+    return true;
+  } catch (primaryError) {
+    window.clearTimeout(timeoutId);
+    console.error('Primary webhook request failed.', primaryError);
+
+    try {
+      const encoded = new URLSearchParams();
+      encoded.append('payload', JSON.stringify(payload));
+
+      const fallbackResponse = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: encoded.toString(),
+        mode: 'cors'
+      });
+
+      if (!fallbackResponse.ok) {
+        throw new Error(`Fallback webhook responded with status ${fallbackResponse.status}`);
+      }
+
+      return true;
+    } catch (secondaryError) {
+      console.error('Fallback webhook request failed.', secondaryError);
+
+      try {
+        await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: JSON.stringify(payload)
+        });
+        return true;
+      } catch (tertiaryError) {
+        console.error('No-cors webhook attempt failed.', tertiaryError);
+      }
+
+      if (navigator.sendBeacon) {
+        try {
+          const blob = new Blob([JSON.stringify(payload)], {
+            type: 'application/json'
+          });
+          const beaconSent = navigator.sendBeacon(WEBHOOK_URL, blob);
+          if (beaconSent) {
+            return true;
+          }
+        } catch (beaconError) {
+          console.error('Beacon webhook attempt failed.', beaconError);
+        }
+      }
+    }
+  }
+
+  return false;
 };
 
 const App = () => {
@@ -25,9 +109,41 @@ const App = () => {
 
   const promptTemplate = useMemo(() => getPromptTemplate(form), [form]);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setIsGenerating(true);
     setCopied(false);
+
+    const platformDetails = getPlatformDetails(form.socialPlatform);
+    const webhookPayload = {
+      brandName: form.brandName,
+      brandColors: form.brandColors || [],
+      font: form.font,
+      socialPlatform: form.socialPlatform,
+      socialPlatformLabel: platformDetails.label,
+      goal: form.goal,
+      headline: form.headline,
+      brandContext: form.brandContext,
+      brandFeel: form.brandFeel,
+      brandMood: form.brandMood,
+      visualStyle: form.visualStyle,
+      keywords: form.keywords,
+      aspectRatio: platformDetails.aspectRatio,
+      logo: form.logo
+        ? {
+            name: form.logo.name,
+            size: form.logo.size,
+            type: form.logo.type,
+            lastModified: form.logo.lastModified
+          }
+        : null,
+      submittedAt: new Date().toISOString()
+    };
+
+    const webhookDelivered = await sendWebhookPayload(webhookPayload);
+
+    if (!webhookDelivered) {
+      console.warn('Webhook payload could not be delivered.');
+    }
 
     window.setTimeout(() => {
       const newAd = generateAdCopy(form);

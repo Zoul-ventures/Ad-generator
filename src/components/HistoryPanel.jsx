@@ -5,6 +5,14 @@ const formatTimestamp = (timestamp) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+const formatLabel = (value) =>
+  value
+    ? value
+        .split(' ')
+        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+        .join(' ')
+    : value;
+
 const HistoryPanel = ({ history, onSelect, activeId }) => (
   <aside className="panel history-panel">
     <header className="panel-header">
@@ -29,7 +37,9 @@ const HistoryPanel = ({ history, onSelect, activeId }) => (
                 onClick={() => onSelect(entry.id)}
               >
                 <span className="history-time">{formatTimestamp(entry.createdAt)}</span>
-                <span className="history-platform">{entry.platform}</span>
+                <span className="history-platform">
+                  {entry.platformLabel || formatLabel(entry.platform)}
+                </span>
                 <p className="history-headline">{entry.headline}</p>
               </button>
             </li>
