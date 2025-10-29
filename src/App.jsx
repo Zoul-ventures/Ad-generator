@@ -21,11 +21,233 @@ const defaultForm = {
 };
 
 const WEBHOOK_URL =
-  'https://n8n.srv969821.hstgr.cloud/webhook-test/e9714c18-2d7f-4ea7-836c-ec25f6f49dcc';
+  'https://n8n.srv969821.hstgr.cloud/webhook/e9714c18-2d7f-4ea7-836c-ec25f6f49dcc';
+const WEBHOOK_TIMEOUT_MS = 120000;
+
+const driveHostPattern = /(?:^|\.)drive\.google\.com$/i;
+const googleUserContentPattern = /(?:^|\.)googleusercontent\.com$/i;
+
+const normalizeRemoteImageUrl = (value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    const url = new URL(value);
+
+    if (driveHostPattern.test(url.hostname)) {
+      const fileMatch = url.pathname.match(/\/file\/d\/([^/]+)\//);
+      const idFromPath = fileMatch ? fileMatch[1] : null;
+      const idFromQuery = url.searchParams.get('id');
+      const fileId = idFromPath || idFromQuery;
+
+      if (fileId) {
+        const sizeParam = url.searchParams.get('sz') || 'w2048';
+        return `https://drive.google.com/thumbnail?id=${fileId}&sz=${sizeParam}`;
+      }
+    }
+
+    if (googleUserContentPattern.test(url.hostname)) {
+      const sizeMatch = url.pathname.match(/=s(\d+)(?:-c)?$/);
+      if (sizeMatch) {
+        return value.replace(/=s\d+(?:-c)?$/, '=s2048');
+      }
+    }
+
+    return value;
+  } catch {
+    return value;
+  }
+};
+
+const shouldBypassFetch = (value) => {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return driveHostPattern.test(url.hostname) || googleUserContentPattern.test(url.hostname);
+  } catch {
+    return false;
+  }
+};
+
+const resolveImageSource = (response, seen = new WeakSet()) => {
+  if (!response) {
+    return null;
+  }
+
+  if (typeof response === 'string') {
+    const value = response.trim();
+    if (!value) {
+      return null;
+    }
+    if (value.startsWith('{') || value.startsWith('[')) {
+      try {
+        return resolveImageSource(JSON.parse(value), seen);
+      } catch {
+        // Continue with raw string below.
+      }
+    }
+    return value;
+  }
+
+  if (Array.isArray(response)) {
+    for (const item of response) {
+      const resolved = resolveImageSource(item, seen);
+      if (resolved) {
+        return resolved;
+      }
+    }
+    return null;
+  }
+
+  if (typeof response !== 'object') {
+    return null;
+  }
+
+  if (seen.has(response)) {
+    return null;
+  }
+  seen.add(response);
+
+  const knownImageKeys = [
+    'imageSrc',
+    'imageSource',
+    'image',
+    'imageUrl',
+    'image_url',
+    'webContentLink',
+    'webContentURL',
+    'webContentUrl',
+    'mediaLink',
+    'downloadUrl',
+    'download_url',
+    'thumbnailLink',
+    'thumbnailUrl',
+    'thumbnail',
+    'webViewLink',
+    'webViewURL',
+    'webViewUrl',
+    'webView',
+    'url',
+    'fileUrl',
+    'file_url'
+  ];
+
+  const nestedKeys = ['body', 'data', 'result', 'results', 'payload', 'resource', 'resources'];
+
+  for (const key of knownImageKeys) {
+    if (response[key]) {
+      return resolveImageSource(response[key], seen);
+    }
+  }
+
+  for (const key of nestedKeys) {
+    if (!response[key]) {
+      continue;
+    }
+
+    const resolved = resolveImageSource(response[key], seen);
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  for (const value of Object.values(response)) {
+    const resolved = resolveImageSource(value, seen);
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  if (response.fileName) {
+    try {
+      const base = new URL(WEBHOOK_URL);
+      return `${base.origin}/${response.fileName}`;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+};
+
+const isDataUrl = (value) => typeof value === 'string' && value.startsWith('data:');
+
+const fetchAsDataUrl = async (url) => {
+  const response = await fetch(url, { mode: 'cors' });
+  if (!response.ok) {
+    throw new Error(`Image request failed with status ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      resolve(typeof reader.result === 'string' ? reader.result : null);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+const prepareImageAsset = async (response) => {
+  const resolved = resolveImageSource(response);
+  const trimmed = typeof resolved === 'string' ? resolved.trim() : resolved;
+  const normalized =
+    typeof trimmed === 'string' && trimmed ? normalizeRemoteImageUrl(trimmed) : trimmed;
+
+  if (!normalized) {
+    return { src: null, externalUrl: null, error: null };
+  }
+
+  if (isDataUrl(normalized)) {
+    return { src: normalized, externalUrl: null, error: null };
+  }
+
+  const base64Like = typeof normalized === 'string' && /^[A-Za-z0-9+/=\s]+$/.test(normalized);
+  if (base64Like && normalized.replace(/\s/g, '').length > 100) {
+    const compact = normalized.replace(/\s/g, '');
+    return {
+      src: `data:image/png;base64,${compact}`,
+      externalUrl: null,
+      error: null
+    };
+  }
+
+  if (shouldBypassFetch(normalized)) {
+    return {
+      src: normalized,
+      externalUrl: typeof trimmed === 'string' ? trimmed : normalized,
+      error: null
+    };
+  }
+
+  try {
+    const dataUrl = await fetchAsDataUrl(normalized);
+    if (!dataUrl) {
+      throw new Error('Empty data URL returned while processing remote image.');
+    }
+    return {
+      src: dataUrl,
+      externalUrl: typeof trimmed === 'string' ? trimmed : normalized,
+      error: null
+    };
+  } catch (error) {
+    console.warn('Unable to load remote image asset.', error);
+    return {
+      src: normalized,
+      externalUrl: typeof trimmed === 'string' ? trimmed : normalized,
+      error: null
+    };
+  }
+};
 
 const sendWebhookPayload = async (payload) => {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 7000);
+  const timeoutId = window.setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
 
   try {
     const response = await fetch(WEBHOOK_URL, {
@@ -40,64 +262,53 @@ const sendWebhookPayload = async (payload) => {
 
     window.clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      throw new Error(`Webhook responded with status ${response.status}`);
-    }
-
-    return true;
-  } catch (primaryError) {
-    window.clearTimeout(timeoutId);
-    console.error('Primary webhook request failed.', primaryError);
+    const contentType = response.headers?.get('content-type') || '';
+    let data = null;
+    let rawText = null;
 
     try {
-      const encoded = new URLSearchParams();
-      encoded.append('payload', JSON.stringify(payload));
+      rawText = await response.clone().text();
+    } catch (readError) {
+      console.warn('Could not read webhook response body.', readError);
+    }
 
-      const fallbackResponse = await fetch(WEBHOOK_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: encoded.toString(),
-        mode: 'cors'
-      });
-
-      if (!fallbackResponse.ok) {
-        throw new Error(`Fallback webhook responded with status ${fallbackResponse.status}`);
-      }
-
-      return true;
-    } catch (secondaryError) {
-      console.error('Fallback webhook request failed.', secondaryError);
-
-      try {
-        await fetch(WEBHOOK_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          body: JSON.stringify(payload)
-        });
-        return true;
-      } catch (tertiaryError) {
-        console.error('No-cors webhook attempt failed.', tertiaryError);
-      }
-
-      if (navigator.sendBeacon) {
+    if (rawText) {
+      if (contentType.includes('application/json')) {
         try {
-          const blob = new Blob([JSON.stringify(payload)], {
-            type: 'application/json'
-          });
-          const beaconSent = navigator.sendBeacon(WEBHOOK_URL, blob);
-          if (beaconSent) {
-            return true;
-          }
-        } catch (beaconError) {
-          console.error('Beacon webhook attempt failed.', beaconError);
+          data = JSON.parse(rawText);
+        } catch (jsonError) {
+          console.warn('Failed to parse webhook JSON response.', jsonError);
+          data = rawText;
+        }
+      } else if (contentType.startsWith('text/')) {
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = rawText;
         }
       }
     }
-  }
 
-  return false;
+    if (!response.ok) {
+      const error = new Error(`Webhook responded with status ${response.status}`);
+      error.response = data;
+      throw error;
+    }
+
+    return { ok: true, data };
+  } catch (error) {
+    window.clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      const timeoutError = new Error(
+        `Webhook did not respond within ${WEBHOOK_TIMEOUT_MS / 1000} seconds.`
+      );
+      timeoutError.code = 'webhook-timeout';
+      console.error(timeoutError.message);
+      return { ok: false, data: null, error: timeoutError };
+    }
+    console.error('Webhook request failed.', error);
+    return { ok: false, data: null, error };
+  }
 };
 
 const App = () => {
@@ -113,44 +324,89 @@ const App = () => {
     setIsGenerating(true);
     setCopied(false);
 
-    const platformDetails = getPlatformDetails(form.socialPlatform);
-    const webhookPayload = {
-      brandName: form.brandName,
-      brandColors: form.brandColors || [],
-      font: form.font,
-      socialPlatform: form.socialPlatform,
-      socialPlatformLabel: platformDetails.label,
-      goal: form.goal,
-      headline: form.headline,
-      brandContext: form.brandContext,
-      brandFeel: form.brandFeel,
-      brandMood: form.brandMood,
-      visualStyle: form.visualStyle,
-      keywords: form.keywords,
-      aspectRatio: platformDetails.aspectRatio,
-      logo: form.logo
-        ? {
-            name: form.logo.name,
-            size: form.logo.size,
-            type: form.logo.type,
-            lastModified: form.logo.lastModified
-          }
-        : null,
-      submittedAt: new Date().toISOString()
-    };
+    let webhookResponse = null;
+    let webhookDelivered = false;
+    let imageAsset = { src: null, externalUrl: null, error: null };
 
-    const webhookDelivered = await sendWebhookPayload(webhookPayload);
+    try {
+      const platformDetails = getPlatformDetails(form.socialPlatform);
+      const webhookPayload = {
+        brandName: form.brandName,
+        brandColors: form.brandColors || [],
+        font: form.font,
+        socialPlatform: form.socialPlatform,
+        socialPlatformLabel: platformDetails.label,
+        goal: form.goal,
+        headline: form.headline,
+        brandContext: form.brandContext,
+        brandFeel: form.brandFeel,
+        brandMood: form.brandMood,
+        visualStyle: form.visualStyle,
+        keywords: form.keywords,
+        aspectRatio: platformDetails.aspectRatio,
+        logo: form.logo
+          ? {
+              name: form.logo.name,
+              size: form.logo.size,
+              type: form.logo.type,
+              lastModified: form.logo.lastModified
+            }
+          : null,
+        submittedAt: new Date().toISOString()
+      };
 
-    if (!webhookDelivered) {
-      console.warn('Webhook payload could not be delivered.');
+      const result = await sendWebhookPayload(webhookPayload);
+      console.info('Webhook invocation result:', result);
+      webhookDelivered = result.ok;
+      webhookResponse = result.data;
+
+      if (!webhookDelivered) {
+        console.warn('Webhook payload could not be delivered.', result.error);
+      }
+
+      if (webhookDelivered) {
+        imageAsset = await prepareImageAsset(webhookResponse);
+      } else if (result.error?.code === 'webhook-timeout') {
+        imageAsset = { src: null, externalUrl: null, error: 'webhook-timeout' };
+      } else if (webhookResponse) {
+        imageAsset = await prepareImageAsset(webhookResponse);
+      }
+    } catch (error) {
+      console.error('Failed to generate ad preview.', error);
+      if (!imageAsset.error) {
+        imageAsset = { src: null, externalUrl: null, error: 'webhook-error' };
+      }
     }
 
-    window.setTimeout(() => {
-      const newAd = generateAdCopy(form);
-      setCurrentAd(newAd);
-      setHistory((prev) => [newAd, ...prev].slice(0, 10));
-      setIsGenerating(false);
-    }, 400);
+    const baseAd = generateAdCopy(form);
+
+    const imagePrompt =
+      (webhookResponse && webhookResponse.body && webhookResponse.body.prompt) ||
+      webhookResponse?.prompt ||
+      null;
+    const imageFileName =
+      webhookResponse?.fileName ||
+      webhookResponse?.body?.fileName ||
+      webhookResponse?.body?.file_name ||
+      null;
+
+    const enrichedAd = {
+      ...baseAd,
+      imageSrc: imageAsset.src,
+      imageExternalUrl: imageAsset.externalUrl,
+      imagePrompt,
+      imageFileName,
+      imageAlt: form.brandName
+        ? `Generated creative for ${form.brandName}`
+        : 'Generated creative preview',
+      imageError: imageAsset.error,
+      webhookDelivered,
+      webhookResponse: webhookResponse ?? null
+    };
+
+    setCurrentAd(enrichedAd);
+    setHistory((prev) => [enrichedAd, ...prev].slice(0, 10));
+    setIsGenerating(false);
   };
 
   const handleHistorySelect = (adId) => {

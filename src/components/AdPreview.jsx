@@ -24,26 +24,38 @@ const EmptyState = () => (
   </div>
 );
 
-const VariantList = ({ variants }) => (
-  <div className="variant-list">
-    <h4>Alternatives & snippets</h4>
-    <ul>
-      {variants.map((variant, index) => (
-        <li key={index}>{variant}</li>
-      ))}
-    </ul>
-  </div>
-);
+const VariantList = ({ variants }) => {
+  if (!variants?.length) {
+    return null;
+  }
 
-const PromptCard = ({ prompt }) => (
-  <div className="prompt-card">
-    <div className="prompt-header">
-      <h4>Prompt sent to your AI</h4>
-      <span className="prompt-badge">Editable</span>
+  return (
+    <div className="variant-list">
+      <h4>Alternatives & snippets</h4>
+      <ul>
+        {variants.map((variant, index) => (
+          <li key={index}>{variant}</li>
+        ))}
+      </ul>
     </div>
-    <pre>{prompt}</pre>
-  </div>
-);
+  );
+};
+
+const PromptCard = ({ prompt, title = 'Prompt sent to your AI', badge = 'Editable' }) => {
+  if (!prompt) {
+    return null;
+  }
+
+  return (
+    <div className="prompt-card">
+      <div className="prompt-header">
+        <h4>{title}</h4>
+        {badge ? <span className="prompt-badge">{badge}</span> : null}
+      </div>
+      <pre>{prompt}</pre>
+    </div>
+  );
+};
 
 const AdPreview = ({ ad, prompt, onCopy, copied }) => (
   <section className="panel preview-panel">
@@ -75,6 +87,50 @@ const AdPreview = ({ ad, prompt, onCopy, copied }) => (
               <span className="aspect-tag">Aspect ratio: {ad.aspectRatio}</span>
             ) : null}
             <h3>{ad.headline}</h3>
+            {ad.imageSrc ? (
+              <div className="image-preview">
+                <img
+                  src={ad.imageSrc}
+                  alt={ad.imageAlt || ad.imageFileName || `${ad.platformLabel || 'Ad'} preview`}
+                />
+                {(ad.imageFileName || ad.imageExternalUrl) && (
+                  <div className="image-meta">
+                    {ad.imageFileName ? <span>Asset: {ad.imageFileName}</span> : null}
+                    {ad.imageExternalUrl ? (
+                      <a href={ad.imageExternalUrl} target="_blank" rel="noopener noreferrer">
+                        Open full-size
+                      </a>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ) : ad.imageError ? (
+              <div className="image-warning">
+                <strong>
+                  {ad.imageError === 'cors-blocked'
+                    ? 'Image blocked by cross-origin policy'
+                    : ad.imageError === 'webhook-timeout'
+                    ? 'Webhook timed out before delivering an image'
+                    : 'Image asset unavailable'}
+                </strong>
+                <p>
+                  {ad.imageError === 'cors-blocked'
+                    ? 'The remote server is preventing this page from displaying the generated image.'
+                    : ad.imageError === 'webhook-timeout'
+                    ? 'The webhook took too long to respond. Try generating again in a moment.'
+                    : 'The webhook did not include a previewable image for this request.'}
+                  {ad.imageExternalUrl ? (
+                    <>
+                      {' '}
+                      <a href={ad.imageExternalUrl} target="_blank" rel="noopener noreferrer">
+                        Open image in a new tab
+                      </a>
+                      .
+                    </>
+                  ) : null}
+                </p>
+              </div>
+            ) : null}
             <p className="ad-body">{ad.body}</p>
             <button type="button" className="cta-button">
               {ad.callToAction}
@@ -96,6 +152,13 @@ const AdPreview = ({ ad, prompt, onCopy, copied }) => (
       </AnimatePresence>
 
       <PromptCard prompt={prompt} />
+      {ad?.imagePrompt ? (
+        <PromptCard
+          prompt={ad.imagePrompt}
+          title="Prompt returned from webhook"
+          badge={ad.imageFileName || 'Webhook'}
+        />
+      ) : null}
     </div>
   </section>
 );
