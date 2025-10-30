@@ -4,6 +4,7 @@ import AdPreview from './components/AdPreview.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
 import PromptTips from './components/PromptTips.jsx';
 import { generateAdCopy, getPlatformDetails } from './utils/generateAd.js';
+import { persistGeneratedImage, listenToGeneratedImages } from './firebase/images.js';
 
 const defaultForm = {
   brandName: '',
@@ -361,6 +362,7 @@ const App = ({ user, onSignOut }) => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
 
+  const userId = user?.uid || null;
   const userEmail = user?.email || '';
   const userInitial = userEmail ? userEmail.charAt(0).toUpperCase() : 'U';
 
@@ -388,6 +390,65 @@ const App = ({ user, onSignOut }) => {
       document.removeEventListener('keydown', handleEscape);
     };
   }, [userMenuOpen]);
+
+  useEffect(() => {
+    if (!userId) {
+      setHistory([]);
+      return undefined;
+    }
+
+    const unsubscribe = listenToGeneratedImages(
+      userId,
+      (snapshot) => {
+        const docs = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          const adMeta = data.meta?.ad || {};
+          const createdAt =
+            data.createdAt && typeof data.createdAt.toDate === 'function'
+              ? data.createdAt.toDate().toISOString()
+              : new Date().toISOString();
+
+          return {
+            id: docSnap.id,
+            createdAt,
+            headline: adMeta.headline || data.title || 'Generated creative',
+            body: adMeta.body || '',
+            callToAction: adMeta.callToAction || 'Learn more',
+            variants: adMeta.variants || [],
+            platform: adMeta.platform || 'instagram',
+            platformLabel: adMeta.platformLabel || adMeta.platform || 'instagram',
+            aspectRatio: adMeta.aspectRatio || '',
+            imageSrc: data.imageUrl || data.sourceUrl || '',
+            imageExternalUrl: data.imageUrl || data.sourceUrl || '',
+            imageStoragePath: data.storagePath || null,
+            imagePrompt: data.prompt || '',
+            imageFileName: data.meta?.imageFileName || null,
+            imageAlt: adMeta.headline
+              ? `Generated creative for ${adMeta.headline}`
+              : 'Generated creative preview',
+            imageError: data.meta?.imageError || null,
+            webhookDelivered:
+              typeof data.meta?.webhookDelivered === 'boolean'
+                ? data.meta.webhookDelivered
+                : true,
+            webhookResponse: data.meta?.webhookSummary || null
+          };
+        });
+
+        setHistory(docs);
+        setCurrentAd((prev) => {
+          if (!prev) {
+            return docs[0] || null;
+          }
+          const matched = docs.find((item) => item.id === prev.id);
+          return matched ? { ...prev, ...matched } : prev;
+        });
+      },
+      { limitTo: 10 }
+    );
+
+    return () => unsubscribe();
+  }, [userId]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -474,8 +535,70 @@ const App = ({ user, onSignOut }) => {
       webhookResponse: webhookResponse ?? null
     };
 
-    setCurrentAd(enrichedAd);
-    setHistory((prev) => [enrichedAd, ...prev].slice(0, 10));
+    let savedRecord = null;
+    if (userId) {
+      const metadataPayload = {
+        imageFileName,
+        webhookDelivered,
+        imageError: imageAsset.error,
+        ad: {
+          headline: baseAd.headline,
+          body: baseAd.body,
+          callToAction: baseAd.callToAction,
+          variants: baseAd.variants,
+          platform: baseAd.platform,
+          platformLabel: baseAd.platformLabel,
+          aspectRatio: baseAd.aspectRatio
+        },
+        webhookSummary: webhookResponse
+          ? {
+              fileName:
+                webhookResponse?.fileName ||
+                webhookResponse?.body?.fileName ||
+                webhookResponse?.body?.file_name ||
+                null,
+              webContentLink:
+                webhookResponse?.webContentLink ||
+                webhookResponse?.body?.webContentLink ||
+                webhookResponse?.body?.webContentURL ||
+                null,
+              webViewLink:
+                webhookResponse?.webViewLink ||
+                webhookResponse?.body?.webViewLink ||
+                null
+            }
+          : null
+      };
+
+      try {
+        savedRecord = await persistGeneratedImage({
+          userId,
+          title: enrichedAd.headline,
+          prompt: imagePrompt || enrichedAd.body || '',
+          imageDataUrl: isDataUrl(imageAsset.src) ? imageAsset.src : null,
+          externalUrl: imageAsset.externalUrl,
+          metadata: metadataPayload
+        });
+      } catch (persistError) {
+        console.error('Could not persist generated image to Firebase.', persistError);
+      }
+    }
+
+    const finalAd = {
+      ...enrichedAd,
+      id: savedRecord?.id || enrichedAd.id,
+      imageExternalUrl: savedRecord?.imageUrl || enrichedAd.imageExternalUrl,
+      imageStoragePath: savedRecord?.storagePath || null
+    };
+
+    if (savedRecord?.imageUrl && !isDataUrl(finalAd.imageSrc)) {
+      finalAd.imageSrc = savedRecord.imageUrl;
+    }
+
+    setCurrentAd(finalAd);
+    if (!userId) {
+      setHistory((prev) => [finalAd, ...prev].slice(0, 10));
+    }
     setIsGenerating(false);
   };
 

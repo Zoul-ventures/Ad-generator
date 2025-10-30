@@ -51,4 +51,15 @@ src/
 3. Add brand voice presets and tone sliders to keep copy aligned with style guides.
 4. Extend the preview card with platform specific character counters or image recommendations.
 
+## Firebase Integration
+
+The app now relies on Firebase for authentication, user profiles, and storing generated creative assets.
+
+1. Create a Firebase project and enable **Authentication (Email/Password)**, **Cloud Firestore**, and **Cloud Storage**.
+2. Add a Web App to your project and copy the configuration values into a `.env.local` file following `.env.example`.
+3. Set up Firestore and Storage security rules so that authenticated users can only access their own `users/{uid}` document, `users/{uid}/generatedImages` collection, and `users/{uid}/generated/*` storage paths.
+4. (Optional) Seed the `users` collection with existing customers; new sign ups are written automatically by the app.
+
+Generated images are uploaded to Storage and their metadata (prompt, CTA, platform details) is stored under `users/{uid}/generatedImages`. The preview panel reads from Firestore so your history stays in sync across devices.
+
 Enjoy building!

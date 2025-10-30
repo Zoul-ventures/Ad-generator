@@ -6,9 +6,10 @@ const initialForm = {
   remember: false
 };
 
-const LoginPage = ({ onAuthenticated }) => {
+const LoginPage = ({ onAuthenticated, onNavigateToSignup }) => {
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -18,36 +19,43 @@ const LoginPage = ({ onAuthenticated }) => {
     }));
   };
 
-  const VALID_EMAIL = 'root@local.dev';
-  const VALID_USERNAME = 'root';
-  const VALID_PASSWORD = 'admin';
-
-  const normaliseLogin = (value) => value.trim().toLowerCase();
-
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
 
-    if (!form.email.trim() || !form.password.trim()) {
+    const email = form.email.trim().toLowerCase();
+    const password = form.password.trim();
+
+    if (!email || !password) {
       setError('Enter your email and password to continue.');
       return;
     }
 
-    const identifier = normaliseLogin(form.email);
-    const matchesEmail = identifier === VALID_EMAIL;
-    const matchesUser = identifier === normaliseLogin(VALID_USERNAME);
-    const matchesPassword = form.password === VALID_PASSWORD;
+    setIsSubmitting(true);
+    try {
+      if (typeof onAuthenticated === 'function') {
+        await onAuthenticated({
+          email,
+          password,
+          remember: form.remember
+        });
+      }
+    } catch (authError) {
+      const message =
+        authError?.message ||
+        'We could not sign you in right now. Double-check your credentials and try again.';
 
-    if (!matchesPassword || (!matchesEmail && !matchesUser)) {
-      setError('Invalid credentials. Try root / admin to sign in.');
-      return;
-    }
-
-    if (typeof onAuthenticated === 'function') {
-      onAuthenticated({
-        email: matchesEmail ? VALID_EMAIL : `${VALID_USERNAME}@local.dev`,
-        remember: form.remember
-      });
+      if (authError?.code === 'auth/invalid-credential') {
+        setError('Incorrect email or password. Please try again.');
+      } else if (authError?.code === 'auth/user-not-found') {
+        setError('No account found with that email. You can create one below.');
+      } else if (authError?.code === 'auth/too-many-requests') {
+        setError('Too many attempts. Please wait a moment before trying again.');
+      } else {
+        setError(message);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -70,13 +78,13 @@ const LoginPage = ({ onAuthenticated }) => {
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="login-field">
-            <span>Email or username</span>
+            <span>Email</span>
             <input
               type="text"
               name="email"
               value={form.email}
               onChange={handleChange}
-              placeholder="root or root@local.dev"
+              placeholder="you@brand.com"
               required
             />
           </label>
@@ -90,7 +98,6 @@ const LoginPage = ({ onAuthenticated }) => {
               onChange={handleChange}
               placeholder="Enter your password"
               required
-              minLength={4}
             />
           </label>
 
@@ -106,14 +113,15 @@ const LoginPage = ({ onAuthenticated }) => {
 
           {error ? <div className="login-error">{error}</div> : null}
 
-          <button type="submit" className="button primary login-submit">
-            Sign in
+          <button type="submit" className="button primary login-submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
 
-        <div className="login-footer">
-          <button type="button" className="button ghost login-support">
-            Need a workspace invite?
+        <div className="auth-switch">
+          <span>New here?</span>
+          <button type="button" onClick={onNavigateToSignup}>
+            Create account
           </button>
         </div>
       </div>
