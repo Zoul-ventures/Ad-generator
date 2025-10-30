@@ -57,7 +57,7 @@ const PromptCard = ({ prompt, title = 'Prompt sent to your AI', badge = 'Editabl
   );
 };
 
-const AdPreview = ({ ad, prompt, onCopy, copied }) => (
+const AdPreview = ({ ad, onCopy, copied }) => (
   <section className="panel preview-panel">
     <header className="panel-header">
       <div>
@@ -151,7 +151,6 @@ const AdPreview = ({ ad, prompt, onCopy, copied }) => (
         )}
       </AnimatePresence>
 
-      <PromptCard prompt={prompt} />
       {ad?.imagePrompt ? (
         <PromptCard
           prompt={ad.imagePrompt}

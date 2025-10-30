@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import AdForm from './components/AdForm.jsx';
 import AdPreview from './components/AdPreview.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
 import PromptTips from './components/PromptTips.jsx';
-import { generateAdCopy, getPromptTemplate, getPlatformDetails } from './utils/generateAd.js';
+import { generateAdCopy, getPlatformDetails } from './utils/generateAd.js';
 
 const defaultForm = {
   brandName: '',
@@ -71,6 +71,48 @@ const shouldBypassFetch = (value) => {
   } catch {
     return false;
   }
+};
+
+const appendFormValue = (formData, key, value) => {
+  if (value === null || value === undefined) {
+    return;
+  }
+
+  if (value instanceof Blob) {
+    formData.append(key, value);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    formData.append(key, JSON.stringify(value));
+    return;
+  }
+
+  if (typeof value === 'object') {
+    formData.append(key, JSON.stringify(value));
+    return;
+  }
+
+  formData.append(key, String(value));
+};
+
+const buildMultipartBody = (payload, logoFile) => {
+  const formData = new FormData();
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (key === 'logo') {
+      return;
+    }
+    appendFormValue(formData, key, value);
+  });
+
+  formData.append('payload', JSON.stringify(payload));
+
+  if (logoFile instanceof File) {
+    formData.append('logo', logoFile, logoFile.name);
+  }
+
+  return formData;
 };
 
 const resolveImageSource = (response, seen = new WeakSet()) => {
@@ -245,17 +287,16 @@ const prepareImageAsset = async (response) => {
   }
 };
 
-const sendWebhookPayload = async (payload) => {
+const sendWebhookPayload = async (payload, logoFile) => {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
 
   try {
+    const formData = buildMultipartBody(payload, logoFile);
+
     const response = await fetch(WEBHOOK_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload),
+      body: formData,
       signal: controller.signal,
       mode: 'cors'
     });
@@ -311,18 +352,47 @@ const sendWebhookPayload = async (payload) => {
   }
 };
 
-const App = () => {
+const App = ({ user, onSignOut }) => {
   const [form, setForm] = useState(defaultForm);
   const [currentAd, setCurrentAd] = useState(null);
   const [history, setHistory] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
 
-  const promptTemplate = useMemo(() => getPromptTemplate(form), [form]);
+  const userEmail = user?.email || '';
+  const userInitial = userEmail ? userEmail.charAt(0).toUpperCase() : 'U';
+
+  useEffect(() => {
+    if (!userMenuOpen) {
+      return undefined;
+    }
+
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [userMenuOpen]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
     setCopied(false);
+    setUserMenuOpen(false);
 
     let webhookResponse = null;
     let webhookDelivered = false;
@@ -355,7 +425,7 @@ const App = () => {
         submittedAt: new Date().toISOString()
       };
 
-      const result = await sendWebhookPayload(webhookPayload);
+      const result = await sendWebhookPayload(webhookPayload, form.logo);
       console.info('Webhook invocation result:', result);
       webhookDelivered = result.ok;
       webhookResponse = result.data;
@@ -445,6 +515,13 @@ const App = () => {
     setForm(defaultForm);
   };
 
+  const handleSignOut = () => {
+    setUserMenuOpen(false);
+    if (typeof onSignOut === 'function') {
+      onSignOut();
+    }
+  };
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -470,6 +547,35 @@ const App = () => {
           >
             {isGenerating ? 'Generating...' : 'Generate ad'}
           </button>
+          {userEmail ? (
+            <div className="user-menu" ref={userMenuRef}>
+              <button
+                type="button"
+                className="user-menu-button"
+                onClick={() => setUserMenuOpen((prev) => !prev)}
+                aria-haspopup="menu"
+                aria-expanded={userMenuOpen}
+              >
+                <span className="user-initials">{userInitial}</span>
+                <span className="user-email">{userEmail}</span>
+                <span className="user-menu-caret" aria-hidden="true">
+                  ▾
+                </span>
+              </button>
+              {userMenuOpen ? (
+                <div className="user-menu-dropdown" role="menu">
+                  <button
+                    type="button"
+                    className="user-menu-item"
+                    onClick={handleSignOut}
+                    role="menuitem"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </header>
 
@@ -513,12 +619,7 @@ const App = () => {
 
         <div className="workspace-side">
           <div id="preview">
-            <AdPreview
-              ad={currentAd}
-              prompt={promptTemplate}
-              onCopy={handleCopy}
-              copied={copied}
-            />
+            <AdPreview ad={currentAd} onCopy={handleCopy} copied={copied} />
           </div>
           <div id="history">
             <HistoryPanel
