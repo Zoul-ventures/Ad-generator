@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import LandingPage from './pages/Landing.jsx';
 import LoginPage from './pages/Login.jsx';
 import SignupPage from './pages/Signup.jsx';
+import TermsPage from './pages/Terms.jsx';
+import PrivacyPage from './pages/Privacy.jsx';
 import App from './App.jsx';
 import {
   registerUser,
@@ -11,7 +14,8 @@ import {
 } from './firebase/auth.js';
 
 const Root = () => {
-  const [view, setView] = useState('login');
+  const [view, setView] = useState('landing');
+  const [returnView, setReturnView] = useState('login');
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
 
@@ -43,16 +47,19 @@ const Root = () => {
 
   const handleAuthenticated = async ({ email, password, remember }) => {
     await signInUser({ email, password, remember });
+    setReturnView('login');
     setView('login');
   };
 
   const handleRegistered = async ({ email, password, firstName, lastName, phone }) => {
     await registerUser({ email, password, firstName, lastName, phone });
+    setReturnView('login');
     setView('login');
   };
 
   const handleSignOut = async () => {
     await signOutUser();
+    setReturnView('login');
     setView('login');
   };
 
@@ -75,11 +82,41 @@ const Root = () => {
   }
 
   if (!user) {
+    if (view === 'landing') {
+      return (
+        <LandingPage
+          onGetStarted={() => setView('login')}
+          onOpenTerms={() => {
+            setReturnView('landing');
+            setView('terms');
+          }}
+          onOpenPrivacy={() => {
+            setReturnView('landing');
+            setView('privacy');
+          }}
+        />
+      );
+    }
+
+    if (view === 'terms') {
+      return <TermsPage onBack={() => setView(returnView)} />;
+    }
+    if (view === 'privacy') {
+      return <PrivacyPage onBack={() => setView(returnView)} />;
+    }
     if (view === 'signup') {
       return (
         <SignupPage
           onRegistered={handleRegistered}
           onNavigateToLogin={() => setView('login')}
+          onNavigateToTerms={() => {
+            setReturnView('signup');
+            setView('terms');
+          }}
+          onNavigateToPrivacy={() => {
+            setReturnView('signup');
+            setView('privacy');
+          }}
         />
       );
     }
@@ -88,6 +125,14 @@ const Root = () => {
       <LoginPage
         onAuthenticated={handleAuthenticated}
         onNavigateToSignup={() => setView('signup')}
+        onNavigateToTerms={() => {
+          setReturnView('login');
+          setView('terms');
+        }}
+        onNavigateToPrivacy={() => {
+          setReturnView('login');
+          setView('privacy');
+        }}
       />
     );
   }

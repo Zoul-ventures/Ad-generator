@@ -6,7 +6,7 @@ const initialForm = {
   remember: false
 };
 
-const LoginPage = ({ onAuthenticated, onNavigateToSignup }) => {
+const LoginPage = ({ onAuthenticated, onNavigateToSignup, onNavigateToTerms, onNavigateToPrivacy }) => {
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -123,6 +123,19 @@ const LoginPage = ({ onAuthenticated, onNavigateToSignup }) => {
           <button type="button" onClick={onNavigateToSignup}>
             Create account
           </button>
+        </div>
+        <div className="auth-legal-hint">
+          <span>
+            Al continuar aceptas los{' '}
+            <button type="button" className="link-button" onClick={onNavigateToTerms}>
+              Términos
+            </button>{' '}
+            y la{' '}
+            <button type="button" className="link-button" onClick={onNavigateToPrivacy}>
+              Política de Privacidad
+            </button>
+            .
+          </span>
         </div>
       </div>
     </div>

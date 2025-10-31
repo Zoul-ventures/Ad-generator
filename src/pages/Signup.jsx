@@ -10,7 +10,7 @@ const initialForm = {
   agreeTerms: false
 };
 
-const SignupPage = ({ onRegistered, onNavigateToLogin }) => {
+const SignupPage = ({ onRegistered, onNavigateToLogin, onNavigateToTerms, onNavigateToPrivacy }) => {
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -217,7 +217,15 @@ const SignupPage = ({ onRegistered, onNavigateToLogin }) => {
               onChange={handleChange}
             />
             <span>
-              I agree to the <a href="#terms">terms</a> and <a href="#privacy">privacy policy</a>.
+              Acepto los{' '}
+              <button type="button" className="link-button" onClick={onNavigateToTerms}>
+                Términos y Condiciones
+              </button>{' '}
+              y la{' '}
+              <button type="button" className="link-button" onClick={onNavigateToPrivacy}>
+                Política de Privacidad
+              </button>
+              .
             </span>
           </label>
 
